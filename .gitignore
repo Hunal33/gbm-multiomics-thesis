@@ -57,9 +57,8 @@ rsconnect/
 
 # Data & results (large / generated)
 data/
-results/
 
 # OS
 .DS_Store
 Thumbs.db
- 2d3af81 (Initial project structure and analysis scripts)
+ 
