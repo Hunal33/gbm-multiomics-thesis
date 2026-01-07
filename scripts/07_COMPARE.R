@@ -124,7 +124,10 @@ gfa_gsea_dir  <- file.path(gfa_dir,  "GSEA", "tables")
 mofa_gsea <- read_gsea_dir(mofa_gsea_dir, "MOFA")
 gfa_gsea  <- read_gsea_dir(gfa_gsea_dir,  "GFA")
 
-gsea_all <- bind_rows(mofa_gsea, gfa_gsea)
+gsea_all <- dplyr::bind_rows(mofa_gsea, gfa_gsea)
+
+# FIX: alias expected object name
+gsea_global <- gsea_all
 
 # Minimal sanity checks
 stopifnot(all(c("Method", "Factor", "Description", "NES", "p.adjust") %in% colnames(gsea_all)))
@@ -133,25 +136,46 @@ stopifnot(all(c("Method", "Factor", "Description", "NES", "p.adjust") %in% colna
 readr::write_csv(gsea_all, file.path(compare_tables_dir, "COMPARE_GSEA_GO_BP_all.csv"))
 
 ## =========================================================
-## Plot A (NEW) — Global Top GO:BP terms (NO factor split)
-##   - Collapse across factors
-##   - Pick best (lowest p.adjust) record per term
-##   - Plot top 20 terms per method
+## Plot A — Global Top GO:BP terms (NO factor split)  [FIXED]
 ## =========================================================
-
 padj_cutoff <- 0.05
 top_n_terms <- 20
 
-# --- split data
-gsea_mofa <- gsea_global_top %>% filter(Method == "MOFA")
-gsea_gfa  <- gsea_global_top %>% filter(Method == "GFA")
+# collapse across factors: keep best record per (Method, Description)
+gsea_global_top <- gsea_all %>%
+  dplyr::mutate(
+    Description = as.character(Description),
+    NES = as.numeric(NES),
+    p.adjust = as.numeric(p.adjust)
+  ) %>%
+  dplyr::filter(!is.na(Description), !is.na(NES), !is.na(p.adjust), is.finite(NES), is.finite(p.adjust)) %>%
+  dplyr::filter(p.adjust <= padj_cutoff) %>%
+  dplyr::group_by(Method, Description) %>%
+  dplyr::arrange(p.adjust, dplyr::desc(abs(NES)), .by_group = TRUE) %>%
+  dplyr::slice_head(n = 1) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(Method) %>%
+  dplyr::arrange(p.adjust, dplyr::desc(abs(NES)), .by_group = TRUE) %>%
+  dplyr::slice_head(n = top_n_terms) %>%
+  dplyr::ungroup()
+
+readr::write_csv(
+  gsea_global_top,
+  file.path(compare_tables_dir, "COMPARE_GSEA_GO_BP_global_top20.csv")
+)
+
+gsea_mofa_plot <- dplyr::filter(gsea_global_top, Method == "MOFA")
+gsea_gfa_plot  <- dplyr::filter(gsea_global_top, Method == "GFA")
 
 # --- MOFA plot
-p_mofa <- ggplot(gsea_mofa, aes(x = NES, y = reorder(Term, NES), fill = NES)) +
+p_mofa <- ggplot(
+  gsea_mofa_plot,
+  aes(x = NES, y = forcats::fct_reorder(Description, NES), fill = NES)
+) +
   geom_col(width = 0.85) +
   scale_fill_gradient(low = "#c6dbef", high = "#0B3C5D") +
   labs(
-    title = "MOFA2 RNA — GSEA (GO:BP): Top 20 enriched terms",
+    title = paste0("MOFA2 RNA — GSEA (GO:BP): Top ", top_n_terms, " enriched terms"),
     subtitle = paste0("Collapsed across factors; p.adjust ≤ ", padj_cutoff),
     x = "Normalized Enrichment Score (NES)",
     y = NULL,
@@ -159,7 +183,7 @@ p_mofa <- ggplot(gsea_mofa, aes(x = NES, y = reorder(Term, NES), fill = NES)) +
   ) +
   theme_bw() +
   theme(axis.text.y = element_text(size = 9))
-p_mofa
+
 ggsave(
   filename = file.path(compare_plots_dir, "MOFA_GSEA_GO_BP_global_top20.png"),
   plot = p_mofa,
@@ -167,11 +191,14 @@ ggsave(
 )
 
 # --- GFA plot
-p_gfa <- ggplot(gsea_gfa, aes(x = NES, y = reorder(Term, NES), fill = NES)) +
+p_gfa <- ggplot(
+  gsea_gfa_plot,
+  aes(x = NES, y = forcats::fct_reorder(Description, NES), fill = NES)
+) +
   geom_col(width = 0.85) +
   scale_fill_gradient(low = "#c6dbef", high = "#0B3C5D") +
   labs(
-    title = "GFA RNA — GSEA (GO:BP): Top 20 enriched terms",
+    title = paste0("GFA RNA — GSEA (GO:BP): Top ", top_n_terms, " enriched terms"),
     subtitle = paste0("Collapsed across factors; p.adjust ≤ ", padj_cutoff),
     x = "Normalized Enrichment Score (NES)",
     y = NULL,
@@ -179,12 +206,13 @@ p_gfa <- ggplot(gsea_gfa, aes(x = NES, y = reorder(Term, NES), fill = NES)) +
   ) +
   theme_bw() +
   theme(axis.text.y = element_text(size = 9))
-p_gfa
+
 ggsave(
   filename = file.path(compare_plots_dir, "GFA_GSEA_GO_BP_global_top20.png"),
   plot = p_gfa,
   width = 10, height = 6.5, dpi = 300
 )
+
 
 
 ## =============================================================

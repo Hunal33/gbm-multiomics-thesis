@@ -13,6 +13,7 @@
 stopifnot(file.exists("scripts/00_setup_paths.R"))
 source("scripts/00_setup_paths.R")
 
+
 ## ---------------------------
 ## 1) LOAD LIBRARIES
 ## ---------------------------
@@ -246,16 +247,16 @@ suppressPackageStartupMessages({
 ve_df <- readRDS(file.path(mofa_dir, "rds", "MOFA_factor_classes.rds"))
 
 ve_long <- ve_df %>%
-  select(Factor, VE_RNA, VE_METH) %>%
-  pivot_longer(
+  dplyr::select(Factor, VE_RNA, VE_METH) %>%
+  tidyr::pivot_longer(
     cols = c(VE_RNA, VE_METH),
     names_to = "View",
     values_to = "Percent"
   ) %>%
-  mutate(
-    View = recode(View, VE_RNA = "RNA", VE_METH = "METH"),
+  dplyr::mutate(
+    View = dplyr::recode(View, VE_RNA = "RNA", VE_METH = "METH"),
     View = factor(View, levels = c("RNA", "METH")),
-    Factor = fct_relevel(Factor, ve_df$Factor)
+    Factor = forcats::fct_relevel(Factor, ve_df$Factor)
   )
 
 p_ve <- ggplot(ve_long, aes(x = Factor, y = Percent, fill = View)) +

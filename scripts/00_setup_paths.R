@@ -50,6 +50,15 @@ dir.create(mofa_dir,    recursive = TRUE, showWarnings = FALSE)
 dir.create(gfa_dir,     recursive = TRUE, showWarnings = FALSE)
 dir.create(compare_dir, recursive = TRUE, showWarnings = FALSE)
 
+## ---- MOFA GSEA output directories ----
+mofa_gsea_dir   <- file.path(mofa_dir, "GSEA")
+TABLES_DIR     <- file.path(mofa_gsea_dir, "tables")
+PLOTS_DIR_GSEA <- file.path(mofa_gsea_dir, "plots")
+
+dir.create(TABLES_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(PLOTS_DIR_GSEA, recursive = TRUE, showWarnings = FALSE)
+
+
 ## 4) STANDARD SUBFOLDERS (MOFA & GFA)
 make_model_folders <- function(base_dir) {
   dirs <- c(
