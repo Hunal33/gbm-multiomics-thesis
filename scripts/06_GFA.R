@@ -574,38 +574,65 @@ message("Saved plot: GFA_VE_stacked_per_factor.png")
 ## ---------------------------
 ## 7) Plot: VE by factor class (stacked by view)
 ## ---------------------------
-weak_thr <- 2.0    # <2% total VE
-rna_thr  <- 0.8    # RNA share ≥ 80%
-meth_thr <- 0.2    # RNA share ≤ 20%
 
+## 1) Load VE table
+ve_df <- readRDS("results/GFA/rds/VE_per_factor_ranked.rds") %>% as.data.frame()
 
-ve_df2 <- ve_df2 %>%
+## Optional sanity checks (prints)
+print(summary(ve_df[, c("VE_RNA","VE_METH","VE_TOTAL")]))
+print(sum(!is.finite(ve_df$VE_RNA) | !is.finite(ve_df$VE_METH) | !is.finite(ve_df$VE_TOTAL)))
+
+## 2) Classify factors (same logic, standardized labels)
+weak_thr <- 2.0
+rna_thr  <- 0.80
+meth_thr <- 0.20
+
+ve_df2 <- ve_df %>%
   mutate(
+    VE_RNA   = as.numeric(VE_RNA),
+    VE_METH  = as.numeric(VE_METH),
+    VE_TOTAL = as.numeric(VE_TOTAL),
     RNA_share = VE_RNA / pmax(VE_TOTAL, 1e-9),
-    Class = case_when(
-      VE_TOTAL < weak_thr        ~ "weak",
-      RNA_share >= rna_thr       ~ "RNA-specific",
-      RNA_share <= meth_thr      ~ "METH-specific",
-      TRUE                       ~ "shared"
-    )
+    Class_raw = case_when(
+      VE_TOTAL < weak_thr         ~ "weak",
+      RNA_share >= rna_thr        ~ "RNA-specific",
+      RNA_share <= meth_thr       ~ "METH-specific",
+      TRUE                        ~ "shared"
+    ),
+    Class = recode(Class_raw, "shared" = "Shared", "weak" = "Weak"),
+    Class = factor(Class, levels = c("METH-specific","RNA-specific","Shared","Weak"))
   )
 
+## Subtitle: counts per class
 counts_txt <- ve_df2 %>%
   count(Class) %>%
-  mutate(Class = factor(Class, levels = c("METH-specific","RNA-specific","Shared","Weak"))) %>%
   arrange(Class)
 
-subtitle_txt <- paste0(
-  paste0(as.character(counts_txt$Class), "=", counts_txt$n),
-  collapse = " | "
-)
+subtitle_txt <- paste0(paste0(as.character(counts_txt$Class), "=", counts_txt$n), collapse = " | ")
+print(subtitle_txt)
 
+## 3) Sum VE by class and view
+ve_class_sum <- ve_df2 %>%
+  select(Class, VE_RNA, VE_METH) %>%
+  pivot_longer(
+    cols = c(VE_RNA, VE_METH),
+    names_to = "View",
+    values_to = "Percent"
+  ) %>%
+  mutate(
+    View = recode(View, VE_RNA = "RNA", VE_METH = "METH"),
+    View = factor(View, levels = c("RNA","METH"))
+  ) %>%
+  group_by(Class, View) %>%
+  summarise(Percent = sum(Percent, na.rm = TRUE), .groups = "drop")
+
+## 4) Plot (dark colors)
 p2 <- ggplot(ve_class_sum, aes(x = Class, y = Percent, fill = View)) +
   geom_col(position = position_stack(reverse = TRUE), width = 0.75) +
   scale_fill_manual(
     values = c(
-      "RNA"  = "#0B3C5D",
-      "METH" = "#CFE1F2"
+      "RNA"  = "#0B3C5D",  # dark blue
+      "METH" = "#CFE1F2"   # light blue
     ),
     name = "View"
   ) +
@@ -623,15 +650,11 @@ p2 <- ggplot(ve_class_sum, aes(x = Class, y = Percent, fill = View)) +
   )
 
 print(p2)
-ggsave(
-  file.path(PLOTS_DIR, "GFA_VE_by_factor_class.png"),
-  p2,
-  width = 7,
-  height = 4,
-  dpi = 300,
-  bg = "white"
-)
 
+## 5) Save
+dir.create("results/GFA/plots", recursive = TRUE, showWarnings = FALSE)
+ggsave("results/GFA/plots/GFA_VE_by_factor_class.png",
+       p2, width = 7, height = 4, dpi = 300, bg = "white")
 message("Saved plot: GFA_VE_by_factor_class.png")
 message("STEP 04 DONE")
 
